@@ -3,9 +3,9 @@ import {
   ConflictException,
   Injectable,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { randomBytes, scryptSync } from 'node:crypto';
 import { DataSource } from 'typeorm';
+import { DB_SCHEMA } from '../database/database.constants.js';
 import { SignupDto } from './dto/signup.dto.js';
 
 type SignupResult = {
@@ -24,12 +24,8 @@ export class AuthService {
   private readonly usersTable: string;
   private schemaPrepared = false;
 
-  constructor(
-    private readonly dataSource: DataSource,
-    private readonly configService: ConfigService,
-  ) {
-    const schema = this.configService.get<string>('DB_SCHEMA', 'public');
-    this.usersTable = `${this.quoteIdentifier(schema)}.${this.quoteIdentifier('users')}`;
+  constructor(private readonly dataSource: DataSource) {
+    this.usersTable = `${this.quoteIdentifier(DB_SCHEMA)}.${this.quoteIdentifier('users')}`;
   }
 
   private quoteIdentifier(identifier: string): string {

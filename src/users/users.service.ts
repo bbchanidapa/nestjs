@@ -3,8 +3,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { DataSource } from 'typeorm';
+import { DB_SCHEMA } from '../database/database.constants';
 import { CreateUserDto } from './dto/create-user.dto';
 import { ReplaceUserDto } from './dto/replace-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -15,12 +15,8 @@ export type UserRow = Record<string, unknown>;
 export class UsersService {
   private readonly usersTable: string;
 
-  constructor(
-    private readonly dataSource: DataSource,
-    private readonly configService: ConfigService,
-  ) {
-    const schema = this.configService.get<string>('DB_SCHEMA', 'public');
-    this.usersTable = `${this.quoteIdentifier(schema)}.${this.quoteIdentifier('users')}`;
+  constructor(private readonly dataSource: DataSource) {
+    this.usersTable = `${this.quoteIdentifier(DB_SCHEMA)}.${this.quoteIdentifier('users')}`;
   }
 
   private quoteIdentifier(identifier: string): string {
