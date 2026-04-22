@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { DataSource } from 'typeorm';
 import { CreateUserDto } from './dto/create-user.dto';
 import { ReplaceUserDto } from './dto/replace-user.dto';
@@ -12,7 +13,24 @@ export type UserRow = Record<string, unknown>;
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly dataSource: DataSource) {}
+  private readonly usersTable: string;
+
+  constructor(
+    private readonly dataSource: DataSource,
+    private readonly configService: ConfigService,
+  ) {
+    const schema = this.configService.get<string>('DB_SCHEMA', 'public');
+    this.usersTable = `${this.quoteIdentifier(schema)}.${this.quoteIdentifier('users')}`;
+  }
+
+  private quoteIdentifier(identifier: string): string {
+    const isValid = /^[A-Za-z_][A-Za-z0-9_]*$/.test(identifier);
+    if (!isValid) {
+      throw new Error(`Invalid SQL identifier: ${identifier}`);
+    }
+
+    return `"${identifier}"`;
+  }
 
   private extractRows(result: unknown): UserRow[] {
     if (Array.isArray(result)) {
@@ -87,7 +105,7 @@ export class UsersService {
   }
 
   async findAll(): Promise<UserRow[]> {
-    return this.runQuery('SELECT * FROM "users"', []);
+    return this.runQuery(`SELECT * FROM ${this.usersTable}`, []);
   }
 
   async createUser(body: CreateUserDto): Promise<UserRow> {
@@ -110,7 +128,7 @@ export class UsersService {
     const placeholders = values.map((_, index) => `$${index + 1}`).join(', ');
 
     const rows = await this.runQuery(
-      `INSERT INTO "users" (${columns.join(', ')}) VALUES (${placeholders}) RETURNING *`,
+      `INSERT INTO ${this.usersTable} (${columns.join(', ')}) VALUES (${placeholders}) RETURNING *`,
       values,
     );
     const createdUser = rows[0];
@@ -124,7 +142,7 @@ export class UsersService {
 
   async findById(id: string): Promise<UserRow> {
     const rows = await this.runQuery(
-      'SELECT * FROM "users" WHERE id = $1 LIMIT 1',
+      `SELECT * FROM ${this.usersTable} WHERE id = $1 LIMIT 1`,
       [id],
     );
     return this.getFirstRowOrThrowNotFound(rows, id);
@@ -168,7 +186,7 @@ export class UsersService {
 
     values.push(id);
     const idParamPosition = values.length;
-    const updateQuery = `UPDATE "users" SET ${sets.join(', ')} WHERE id = $${idParamPosition} RETURNING *`;
+    const updateQuery = `UPDATE ${this.usersTable} SET ${sets.join(', ')} WHERE id = $${idParamPosition} RETURNING *`;
 
     const rows = await this.runQuery(updateQuery, values);
     return this.getFirstRowOrThrowNotFound(rows, id);
@@ -196,7 +214,7 @@ export class UsersService {
     values.push(id);
 
     const rows = await this.runQuery(
-      `UPDATE "users" SET ${sets.join(', ')} WHERE id = $${idParamPosition} RETURNING *`,
+      `UPDATE ${this.usersTable} SET ${sets.join(', ')} WHERE id = $${idParamPosition} RETURNING *`,
       values,
     );
     return this.getFirstRowOrThrowNotFound(rows, id);
@@ -204,7 +222,7 @@ export class UsersService {
 
   async deleteById(id: string): Promise<UserRow> {
     const rows = await this.runQuery(
-      'DELETE FROM "users" WHERE id = $1 RETURNING *',
+      `DELETE FROM ${this.usersTable} WHERE id = $1 RETURNING *`,
       [id],
     );
     return this.getFirstRowOrThrowNotFound(rows, id);
