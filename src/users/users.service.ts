@@ -63,16 +63,36 @@ export class UsersService {
     }
   }
 
+  private validateOptionalRolePayload(
+    payload: { role?: unknown },
+    method: 'POST' | 'PATCH' | 'PUT',
+  ): void {
+    if (payload.role !== undefined && typeof payload.role !== 'string') {
+      throw new BadRequestException(`Role must be a string for ${method}`);
+    }
+  }
+
   async findAll(): Promise<UserRow[]> {
     return this.runQuery('SELECT * FROM "users"', []);
   }
 
   async createUser(body: CreateUserDto): Promise<UserRow> {
     this.validateFullNamePayload(body, 'POST');
+    this.validateOptionalRolePayload(body, 'POST');
+
+    const columns = ['"firstname"', '"lastname"'];
+    const values: unknown[] = [body.firstname, body.lastname];
+
+    if (typeof body.role === 'string') {
+      columns.push('"role"');
+      values.push(body.role);
+    }
+
+    const placeholders = values.map((_, index) => `$${index + 1}`).join(', ');
 
     const rows = await this.runQuery(
-      'INSERT INTO "users" ("firstname", "lastname") VALUES ($1, $2) RETURNING *',
-      [body.firstname, body.lastname],
+      `INSERT INTO "users" (${columns.join(', ')}) VALUES (${placeholders}) RETURNING *`,
+      values,
     );
     const createdUser = rows[0];
 
@@ -92,6 +112,8 @@ export class UsersService {
   }
 
   async updateById(id: string, body: UpdateUserDto): Promise<UserRow> {
+    this.validateOptionalRolePayload(body, 'PATCH');
+
     const sets: string[] = [];
     const values: unknown[] = [];
     let index = 1;
@@ -108,9 +130,15 @@ export class UsersService {
       index += 1;
     }
 
+    if (typeof body.role === 'string') {
+      sets.push(`"role" = $${index}`);
+      values.push(body.role);
+      index += 1;
+    }
+
     if (sets.length === 0) {
       throw new BadRequestException(
-        'At least one field is required: firstname, lastname',
+        'At least one field is required: firstname, lastname, role',
       );
     }
 
@@ -124,10 +152,23 @@ export class UsersService {
 
   async replaceUserById(id: string, body: ReplaceUserDto): Promise<UserRow> {
     this.validateFullNamePayload(body, 'PUT');
+    this.validateOptionalRolePayload(body, 'PUT');
+
+    const sets = ['"firstname" = $1', '"lastname" = $2'];
+    const values: unknown[] = [body.firstname, body.lastname];
+    let idParamPosition = 3;
+
+    if (typeof body.role === 'string') {
+      sets.push('"role" = $3');
+      values.push(body.role);
+      idParamPosition = 4;
+    }
+
+    values.push(id);
 
     const rows = await this.runQuery(
-      'UPDATE "users" SET "firstname" = $1, "lastname" = $2 WHERE id = $3 RETURNING *',
-      [body.firstname, body.lastname, id],
+      `UPDATE "users" SET ${sets.join(', ')} WHERE id = $${idParamPosition} RETURNING *`,
+      values,
     );
     return this.getFirstRowOrThrowNotFound(rows, id);
   }
