@@ -131,4 +131,12 @@ export class UsersService {
     );
     return this.getFirstRowOrThrowNotFound(rows, id);
   }
+
+  async deleteById(id: string): Promise<UserRow> {
+    const rows = await this.runQuery(
+      'DELETE FROM "users" WHERE id = $1 RETURNING *',
+      [id],
+    );
+    return this.getFirstRowOrThrowNotFound(rows, id);
+  }
 }
