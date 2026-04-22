@@ -13,7 +13,10 @@ import { UsersModule } from './users/users.module';
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
-        const databaseUrl = configService.get<string>('DATABASE_URL');
+        const databaseUrl =
+          configService.get<string>('DATABASE_URL') ??
+          configService.get<string>('NEON_DATABASE_URL') ??
+          configService.get<string>('POSTGRES_URL');
         const isProduction =
           configService.get<string>('NODE_ENV') === 'production';
         const dbSslValue = configService.get<string>('DB_SSL');
@@ -21,6 +24,13 @@ import { UsersModule } from './users/users.module';
           dbSslValue !== undefined
             ? dbSslValue === 'true'
             : isProduction || Boolean(databaseUrl);
+
+        // In production/cloud, require URL-based database config (Neon/managed DB).
+        if (isProduction && !databaseUrl) {
+          throw new Error(
+            'DATABASE_URL (or NEON_DATABASE_URL/POSTGRES_URL) is required in production.',
+          );
+        }
 
         const baseConfig = {
           type: 'postgres' as const,
