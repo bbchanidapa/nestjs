@@ -1,9 +1,10 @@
 import { Body, Controller, Get, Param, Patch, Post, Put } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
-import { UsersService } from './users.service';
-import type { UserRow } from './users.service';
 import { ReplaceUserDto } from './dto/replace-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { type UserRow, UsersService } from './users.service';
+
+type ReplaceUserService = Pick<UsersService, 'replaceUserById'>;
 
 @Controller('users')
 export class UsersController {
@@ -41,13 +42,6 @@ export class UsersController {
     @Param('id') id: string,
     @Body() body: ReplaceUserDto,
   ): Promise<UserRow> {
-    const service: {
-      replaceUserById(
-        userId: string,
-        payload: ReplaceUserDto,
-      ): Promise<UserRow>;
-    } = this.usersService;
-
-    return service.replaceUserById(id, body);
+    return (this.usersService as ReplaceUserService).replaceUserById(id, body);
   }
 }
