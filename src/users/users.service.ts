@@ -72,11 +72,30 @@ export class UsersService {
     }
   }
 
+  private validateAllowedFields(
+    payload: Record<string, unknown>,
+    allowedFields: string[],
+  ): void {
+    const allowedSet = new Set(allowedFields);
+    const invalidField = Object.keys(payload).find(
+      (key) => !allowedSet.has(key),
+    );
+
+    if (invalidField) {
+      throw new BadRequestException(`Field "${invalidField}" does not exist`);
+    }
+  }
+
   async findAll(): Promise<UserRow[]> {
     return this.runQuery('SELECT * FROM "users"', []);
   }
 
   async createUser(body: CreateUserDto): Promise<UserRow> {
+    this.validateAllowedFields(body as unknown as Record<string, unknown>, [
+      'firstname',
+      'lastname',
+      'role',
+    ]);
     this.validateFullNamePayload(body, 'POST');
     this.validateOptionalRolePayload(body, 'POST');
 
@@ -112,6 +131,11 @@ export class UsersService {
   }
 
   async updateById(id: string, body: UpdateUserDto): Promise<UserRow> {
+    this.validateAllowedFields(body as unknown as Record<string, unknown>, [
+      'firstname',
+      'lastname',
+      'role',
+    ]);
     this.validateOptionalRolePayload(body, 'PATCH');
 
     const sets: string[] = [];
@@ -151,6 +175,11 @@ export class UsersService {
   }
 
   async replaceUserById(id: string, body: ReplaceUserDto): Promise<UserRow> {
+    this.validateAllowedFields(body as unknown as Record<string, unknown>, [
+      'firstname',
+      'lastname',
+      'role',
+    ]);
     this.validateFullNamePayload(body, 'PUT');
     this.validateOptionalRolePayload(body, 'PUT');
 
