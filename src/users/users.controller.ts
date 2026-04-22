@@ -7,7 +7,9 @@ import {
   Patch,
   Post,
   Put,
+  UseGuards,
 } from '@nestjs/common';
+import { AuthTokenGuard } from '../auth/auth-token.guard.js';
 import { CreateUserDto } from './dto/create-user.dto';
 import { ReplaceUserDto } from './dto/replace-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -32,16 +34,19 @@ export class UsersController {
     return this.usersService.findById(id);
   }
 
+  @UseGuards(AuthTokenGuard)
   @Patch(':id')
   updateById(@Param('id') id: string, @Body() body: UpdateUserDto) {
     return this.usersService.updateById(id, body);
   }
 
+  @UseGuards(AuthTokenGuard)
   @Put(':id')
   replaceById(@Param('id') id: string, @Body() body: ReplaceUserDto) {
     return this.usersService.replaceUserById(id, body);
   }
 
+  @UseGuards(AuthTokenGuard)
   @Delete(':id')
   deleteById(@Param('id') id: string) {
     return this.usersService.deleteById(id);

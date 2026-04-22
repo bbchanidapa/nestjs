@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: nestjs-api-gateway
+    runtime: node
+    plan: free
+    rootDir: gateway
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: AUTH_SERVICE_URL
+        sync: false
+      - key: USERS_SERVICE_URL
+        sync: false
+      - key: CORS_ORIGIN
+        value: "*"

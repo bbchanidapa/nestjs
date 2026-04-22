@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -48,6 +49,12 @@ export class UsersService {
     return [];
   }
 
+  private sanitizeUserRow(row: UserRow): UserRow {
+    const safeRow = { ...row };
+    delete safeRow.password_hash;
+    return safeRow;
+  }
+
   private async runQuery(query: string, params: unknown[]): Promise<UserRow[]> {
     const result: unknown = await this.dataSource.query(query, params);
     return this.extractRows(result);
@@ -60,7 +67,7 @@ export class UsersService {
       throw new NotFoundException(`User with id "${id}" not found`);
     }
 
-    return user;
+    return this.sanitizeUserRow(user);
   }
 
   private validateFullNamePayload(
@@ -86,6 +93,19 @@ export class UsersService {
     }
   }
 
+  private validateOptionalEmailPayload(
+    payload: { email?: unknown },
+    method: 'PATCH' | 'PUT',
+  ): void {
+    if (payload.email !== undefined && typeof payload.email !== 'string') {
+      throw new BadRequestException(`Email must be a string for ${method}`);
+    }
+
+    if (typeof payload.email === 'string' && payload.email.trim() === '') {
+      throw new BadRequestException(`Email cannot be empty for ${method}`);
+    }
+  }
+
   private validateAllowedFields(
     payload: Record<string, unknown>,
     allowedFields: string[],
@@ -101,7 +121,8 @@ export class UsersService {
   }
 
   async findAll(): Promise<UserRow[]> {
-    return this.runQuery(`SELECT * FROM ${this.usersTable}`, []);
+    const rows = await this.runQuery(`SELECT * FROM ${this.usersTable}`, []);
+    return rows.map((row) => this.sanitizeUserRow(row));
   }
 
   async createUser(body: CreateUserDto): Promise<UserRow> {
@@ -146,10 +167,12 @@ export class UsersService {
 
   async updateById(id: string, body: UpdateUserDto): Promise<UserRow> {
     this.validateAllowedFields(body as unknown as Record<string, unknown>, [
+      'email',
       'firstname',
       'lastname',
       'role',
     ]);
+    this.validateOptionalEmailPayload(body, 'PATCH');
     this.validateOptionalRolePayload(body, 'PATCH');
 
     const sets: string[] = [];
@@ -159,6 +182,12 @@ export class UsersService {
     if (typeof body.firstname === 'string') {
       sets.push(`"firstname" = $${index}`);
       values.push(body.firstname);
+      index += 1;
+    }
+
+    if (typeof body.email === 'string') {
+      sets.push(`"email" = $${index}`);
+      values.push(body.email.trim().toLowerCase());
       index += 1;
     }
 
@@ -176,7 +205,7 @@ export class UsersService {
 
     if (sets.length === 0) {
       throw new BadRequestException(
-        'At least one field is required: firstname, lastname, role',
+        'At least one field is required: email, firstname, lastname, role',
       );
     }
 
@@ -184,16 +213,34 @@ export class UsersService {
     const idParamPosition = values.length;
     const updateQuery = `UPDATE ${this.usersTable} SET ${sets.join(', ')} WHERE id = $${idParamPosition} RETURNING *`;
 
-    const rows = await this.runQuery(updateQuery, values);
-    return this.getFirstRowOrThrowNotFound(rows, id);
+    try {
+      const rows = await this.runQuery(updateQuery, values);
+      return this.getFirstRowOrThrowNotFound(rows, id);
+    } catch (error) {
+      const dbCode =
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        typeof (error as { code: unknown }).code === 'string'
+          ? (error as { code: string }).code
+          : '';
+
+      if (dbCode === '23505') {
+        throw new ConflictException('Email already exists');
+      }
+
+      throw error;
+    }
   }
 
   async replaceUserById(id: string, body: ReplaceUserDto): Promise<UserRow> {
     this.validateAllowedFields(body as unknown as Record<string, unknown>, [
+      'email',
       'firstname',
       'lastname',
       'role',
     ]);
+    this.validateOptionalEmailPayload(body, 'PUT');
     this.validateFullNamePayload(body, 'PUT');
     this.validateOptionalRolePayload(body, 'PUT');
 
@@ -201,19 +248,41 @@ export class UsersService {
     const values: unknown[] = [body.firstname, body.lastname];
     let idParamPosition = 3;
 
+    if (typeof body.email === 'string') {
+      sets.push(`"email" = $${idParamPosition}`);
+      values.push(body.email.trim().toLowerCase());
+      idParamPosition += 1;
+    }
+
     if (typeof body.role === 'string') {
-      sets.push('"role" = $3');
+      sets.push(`"role" = $${idParamPosition}`);
       values.push(body.role);
-      idParamPosition = 4;
+      idParamPosition += 1;
     }
 
     values.push(id);
 
-    const rows = await this.runQuery(
-      `UPDATE ${this.usersTable} SET ${sets.join(', ')} WHERE id = $${idParamPosition} RETURNING *`,
-      values,
-    );
-    return this.getFirstRowOrThrowNotFound(rows, id);
+    try {
+      const rows = await this.runQuery(
+        `UPDATE ${this.usersTable} SET ${sets.join(', ')} WHERE id = $${idParamPosition} RETURNING *`,
+        values,
+      );
+      return this.getFirstRowOrThrowNotFound(rows, id);
+    } catch (error) {
+      const dbCode =
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        typeof (error as { code: unknown }).code === 'string'
+          ? (error as { code: string }).code
+          : '';
+
+      if (dbCode === '23505') {
+        throw new ConflictException('Email already exists');
+      }
+
+      throw error;
+    }
   }
 
   async deleteById(id: string): Promise<UserRow> {
