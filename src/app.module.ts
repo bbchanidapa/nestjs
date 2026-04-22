@@ -13,18 +13,36 @@ import { UsersModule } from './users/users.module';
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
-        const sslEnabled = configService.get<string>('DB_SSL') === 'true';
+        const databaseUrl = configService.get<string>('DATABASE_URL');
+        const isProduction =
+          configService.get<string>('NODE_ENV') === 'production';
+        const dbSslValue = configService.get<string>('DB_SSL');
+        const sslEnabled =
+          dbSslValue !== undefined
+            ? dbSslValue === 'true'
+            : isProduction || Boolean(databaseUrl);
+
+        const baseConfig = {
+          type: 'postgres' as const,
+          autoLoadEntities: true,
+          synchronize: false,
+          ssl: sslEnabled ? ({ rejectUnauthorized: false } as const) : false,
+        };
+
+        if (databaseUrl) {
+          return {
+            ...baseConfig,
+            url: databaseUrl,
+          };
+        }
 
         return {
-          type: 'postgres' as const,
+          ...baseConfig,
           host: configService.get<string>('DB_HOST', 'localhost'),
           port: Number(configService.get<string>('DB_PORT', '5432')),
           username: configService.get<string>('DB_USER', 'postgres'),
           password: configService.get<string>('DB_PASS', ''),
           database: configService.get<string>('DB_NAME', 'postgres'),
-          autoLoadEntities: true,
-          synchronize: false,
-          ssl: sslEnabled ? { rejectUnauthorized: false } : false,
         };
       },
     }),
