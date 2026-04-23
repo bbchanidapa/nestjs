@@ -48,7 +48,7 @@ export class AuthService {
   private readonly usersTable: string;
   private readonly accessTokensTable: string;
   private schemaPrepared = false;
-  private readonly accessTokenTtlSeconds = 120;
+  private readonly accessTokenTtlSeconds = 24 * 60 * 60;
 
   constructor(
     private readonly dataSource: DataSource,
